@@ -81,7 +81,7 @@ dev:
 
 dev-api:
 	@echo -e "${CYAN}*** Starting FastAPI backend on http://localhost:8000${RST}"
-	${POETRY_BIN} run uvicorn api.index:app --reload --port 8000
+	${POETRY_BIN} run uvicorn serverless.backend.index:app --reload --port 8000
 
 dev-all:
 	@echo -e "${CYAN}*** Starting both frontend and backend${RST}"
@@ -89,7 +89,7 @@ dev-all:
 	@echo -e "${WHITE}Backend:  http://localhost:8000${RST}"
 	@echo -e "${ORANGE}(Press Ctrl+C to stop both)${RST}"
 	@trap 'kill 0' EXIT; \
-		${POETRY_BIN} run uvicorn api.index:app --reload --port 8000 & \
+		${POETRY_BIN} run uvicorn serverless.backend.index:app --reload --port 8000 & \
 		npm run dev & \
 		wait
 
@@ -107,23 +107,23 @@ build:
 
 format:
 	@echo -e "${CYAN}*** Formatting Python with ruff${RST}"
-	${POETRY_BIN} run ruff format api/
+	${POETRY_BIN} run ruff format serverless/
 	@echo -e "${CYAN}*** Sorting imports${RST}"
-	${POETRY_BIN} run ruff check --select I --fix api/
+	${POETRY_BIN} run ruff check --select I --fix serverless/
 
 lint:
 	@echo -e "${CYAN}*** Linting Python with ruff${RST}"
-	${POETRY_BIN} run ruff check api/
+	${POETRY_BIN} run ruff check serverless/
 	@echo -e "${CYAN}*** Linting TypeScript with ESLint${RST}"
 	npm run lint
 
 lint-fix:
 	@echo -e "${CYAN}*** Fixing Python lint issues${RST}"
-	${POETRY_BIN} run ruff check --fix api/
+	${POETRY_BIN} run ruff check --fix serverless/
 
 mypy:
 	@echo -e "${CYAN}*** Running mypy type checks${RST}"
-	${POETRY_BIN} run mypy api/
+	${POETRY_BIN} run mypy serverless/
 
 # =============================================================================
 # Poetry Management

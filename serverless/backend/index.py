@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Annotated, Any, cast
 import fitz  # PyMuPDF
 from docx import Document
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pptx import Presentation
 from pydantic import BaseModel
@@ -547,9 +547,20 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
 
 @app.post("/upload")
-async def upload(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
-    """Upload and process a document file."""
+async def upload(
+    file: Annotated[UploadFile, File()],
+    filename: Annotated[str | None, Form()] = None,
+) -> dict[str, Any]:
+    """Upload and process a document file.
+
+    Args:
+        file: The uploaded file
+        filename: Optional full path (including folder structure) for the file
+    """
     try:
+        # Use provided filename (with folder structure) or fall back to file.filename
+        display_filename = filename or file.filename or "unknown"
+
         text = extract_text(file)
         if not text.strip():
             raise HTTPException(status_code=400, detail="Could not extract text from file")
@@ -572,7 +583,7 @@ async def upload(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
                     "metadata": {
                         "text": text_chunk,
                         "document_id": document_id,
-                        "filename": file.filename,
+                        "filename": display_filename,
                         "chunk_index": i,
                         "total_chunks": len(text_chunks),
                         "uploaded_at": uploaded_at,
@@ -586,7 +597,7 @@ async def upload(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
         return {
             "success": True,
             "document_id": document_id,
-            "filename": file.filename,
+            "filename": display_filename,
             "chunks": len(text_chunks),
         }
 

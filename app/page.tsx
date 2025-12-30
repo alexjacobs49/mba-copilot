@@ -38,6 +38,8 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(320); // Default 320px (was w-80 = 20rem = 320px)
+  const [isResizing, setIsResizing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<ChatSettings>(DEFAULT_SETTINGS);
@@ -176,13 +178,13 @@ export default function Home() {
     setIsUploading(true);
     setError(null);
 
-    const supportedExtensions = ['.pdf', '.docx', '.txt', '.md', '.csv'];
+    const supportedExtensions = ['.pdf', '.docx', '.pptx', '.txt', '.md', '.csv'];
     const validFiles = files.filter((f) =>
       supportedExtensions.some((ext) => f.name.toLowerCase().endsWith(ext))
     );
 
     if (validFiles.length === 0) {
-      setError('No supported files found. Please upload PDF, DOCX, TXT, MD, or CSV files.');
+      setError('No supported files found. Please upload PDF, DOCX, PPTX, TXT, MD, or CSV files.');
       setIsUploading(false);
       return;
     }
@@ -190,12 +192,43 @@ export default function Home() {
     let successCount = 0;
     let failCount = 0;
 
+    // Determine if we're uploading a folder (check first file for path info)
+    const firstFile = validFiles[0] as File & { webkitRelativePath?: string; path?: string };
+    const firstPath = firstFile.webkitRelativePath || firstFile.path || '';
+    const isFolder = firstPath.includes('/');
+    const folderName = isFolder ? firstPath.split('/')[0] : null;
+
     for (const file of validFiles) {
       try {
-        setUploadStatus(`Uploading ${file.name}... (${successCount + failCount + 1}/${validFiles.length})`);
+        const fileWithPath = file as File & { webkitRelativePath?: string; path?: string };
 
+        // Get the full path (webkitRelativePath from folder input, path from drag/drop)
+        const fullPath = fileWithPath.webkitRelativePath || fileWithPath.path || '';
+
+        // Display progress
+        const displayName = folderName
+          ? `${folderName} (${successCount + failCount + 1}/${validFiles.length})`
+          : file.name;
+        setUploadStatus(`Uploading ${displayName}...`);
+
+        // Prepare form data
         const formData = new FormData();
         formData.append('file', file);
+
+        // Build the final filename path
+        // Clean up the path by removing leading ./ and /
+        let finalFilename = fullPath || file.name;
+
+        // Remove leading ./ or / from the path
+        finalFilename = finalFilename.replace(/^\.\//, '').replace(/^\//, '');
+
+        // If after cleanup there's no path (just filename), use file.name
+        if (!finalFilename || finalFilename === file.name) {
+          finalFilename = file.name;
+        }
+
+        console.log('Uploading file:', file.name, 'with path:', finalFilename);
+        formData.append('filename', finalFilename);
 
         const res = await fetch('/backend/upload', {
           method: 'POST',
@@ -221,16 +254,72 @@ export default function Home() {
     await fetchDocuments();
 
     if (failCount === 0) {
-      setUploadStatus(`✓ Uploaded ${successCount} file${successCount !== 1 ? 's' : ''}`);
+      const message = folderName
+        ? `✓ Uploaded folder "${folderName}" (${successCount} file${successCount !== 1 ? 's' : ''})`
+        : `✓ Uploaded ${successCount} file${successCount !== 1 ? 's' : ''}`;
+      setUploadStatus(message);
     } else {
-      setUploadStatus(`✓ ${successCount} uploaded, ✗ ${failCount} failed`);
+      const message = folderName
+        ? `✓ Folder "${folderName}": ${successCount} uploaded, ✗ ${failCount} failed`
+        : `✓ ${successCount} uploaded, ✗ ${failCount} failed`;
+      setUploadStatus(message);
     }
 
     setIsUploading(false);
     setTimeout(() => setUploadStatus(null), 3000);
   }, [fetchDocuments]);
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
+  const onDrop = useCallback(async (acceptedFiles: File[], _fileRejections: unknown, event: any) => {
+    // Try to extract folder structure from drag event
+    const items = event?.dataTransfer?.items;
+    if (items) {
+      const filesWithPaths: Array<File & { path?: string }> = [];
+
+      // Helper to traverse directory entries recursively
+      const traverseFileTree = async (item: any, parentPath = ''): Promise<void> => {
+        return new Promise((resolve) => {
+          if (item.isFile) {
+            item.file((file: File) => {
+              const fileWithPath = file as File & { path?: string };
+              // Build the full path: parentPath already includes trailing slash if not empty
+              fileWithPath.path = parentPath + file.name;
+              filesWithPaths.push(fileWithPath);
+              resolve();
+            });
+          } else if (item.isDirectory) {
+            const dirReader = item.createReader();
+            dirReader.readEntries(async (entries: any[]) => {
+              // Add this directory to the path with trailing slash
+              const newPath = parentPath + item.name + '/';
+              for (const entry of entries) {
+                await traverseFileTree(entry, newPath);
+              }
+              resolve();
+            });
+          } else {
+            resolve();
+          }
+        });
+      };
+
+      // Process all dropped items
+      const promises = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i].webkitGetAsEntry();
+        if (item) {
+          promises.push(traverseFileTree(item, ''));
+        }
+      }
+
+      await Promise.all(promises);
+
+      if (filesWithPaths.length > 0) {
+        await processFiles(filesWithPaths);
+        return;
+      }
+    }
+
+    // Fallback to regular files if no path info available
     await processFiles(acceptedFiles);
   }, [processFiles]);
 
@@ -239,6 +328,7 @@ export default function Home() {
     accept: {
       'application/pdf': ['.pdf'],
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation': ['.pptx'],
       'text/plain': ['.txt'],
       'text/markdown': ['.md'],
       'text/csv': ['.csv'],
@@ -298,6 +388,40 @@ export default function Home() {
     setExpandedSources(newExpanded);
   };
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      // Set min width to 240px and max width to 600px
+      const newWidth = Math.min(Math.max(e.clientX, 240), 600);
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      // Prevent text selection while resizing
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+  }, [isResizing]);
+
   return (
     <PasswordGate>
       <div className="flex h-screen bg-slate-50">
@@ -322,9 +446,11 @@ export default function Home() {
 
         {/* Sidebar */}
         <aside
-          className={`${
-            sidebarOpen ? 'w-80' : 'w-0'
-          } transition-all duration-300 bg-white border-r border-slate-200 flex flex-col overflow-hidden flex-shrink-0`}
+          className="bg-white border-r border-slate-200 flex flex-col overflow-hidden flex-shrink-0 relative"
+          style={{
+            width: sidebarOpen ? `${sidebarWidth}px` : '0px',
+            transition: isResizing ? 'none' : 'width 0.3s'
+          }}
         >
           <div className="p-4 border-b border-slate-200">
             <div className="flex items-center justify-between mb-4">
@@ -401,6 +527,19 @@ export default function Home() {
               />
             )}
           </div>
+
+          {/* Resize Handle */}
+          {sidebarOpen && (
+            <div
+              onMouseDown={handleMouseDown}
+              className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-columbia-400 transition-colors group"
+              style={{
+                backgroundColor: isResizing ? '#93c5fd' : 'transparent'
+              }}
+            >
+              <div className="absolute top-0 right-0 w-1 h-full group-hover:w-1 group-hover:bg-columbia-500" />
+            </div>
+          )}
         </aside>
 
         {/* Main Chat Area */}

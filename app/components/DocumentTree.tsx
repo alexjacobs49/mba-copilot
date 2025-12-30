@@ -274,9 +274,13 @@ export default function DocumentTree({
     return null;
   }
 
+  // Always render tree children directly, skipping the artificial "My Documents" root
+  // This gives us a clean folder structure
   return (
     <div className="border-2 border-slate-300 rounded-lg overflow-hidden shadow-sm">
-      {renderNode(tree, 0)}
+      <div className="divide-y divide-slate-100">
+        {tree.children.map((child) => renderNode(child, -1))}
+      </div>
     </div>
   );
 }

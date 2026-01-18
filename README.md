@@ -54,7 +54,10 @@ If your instructor has provided access to Columbia's OpenAI endpoint:
 1. Go to <a href="https://app.pinecone.io/" target="_blank">app.pinecone.io</a>
 2. Create a free account
 3. Click "API Keys" in the sidebar
-4. Copy your API key
+4. Click **"+ API Key"**
+5. Give the key a name (e.g., mbacopilot)
+6. Click **"Create Key"**
+7. Copy and Save your API key
 
 ### Step 2: Fork the Repository
 
@@ -66,15 +69,15 @@ If your instructor has provided access to Columbia's OpenAI endpoint:
 
 In the Pinecone console:
 
-1. Click **"Create Index"**
-2. Select **Custom Settings**
+1. Click **"Database"** on the left side panel
+2. Click **"Create Index"**
 3. Configure the index:
    - **Name:** `mba-copilot`
    - **Model:** `text-embedding-3-large`
    - **Dimensions:** `1024`
    - **Metric:** `cosine`
-   - **Cloud Provider:** AWS (or your preferred region)
-   - **Region:** `us-east-1` (or closest to you)
+   - **Cloud Provider:** AWS (other providers require a paid subscription)
+   - **Region:** `us-east-1`
 4. Click **"Create Index"**
 
 **Important:** The dimensions **must be 1024** to match the OpenAI `text-embedding-3-large` model used by this app.

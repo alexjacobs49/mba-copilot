@@ -352,46 +352,51 @@ def extract_structured_chunks(file: UploadFile) -> list[dict[str, Any]]:
     if filename.endswith(".pptx"):
         text = _extract_pptx_text(content)
     elif filename.endswith(".csv"):
-        # For CSV: Use row-based chunking with batching to balance context and performance
-        # Convert each row to "Col1: val1 | Col2: val2" format, then batch rows together
-        text_content = content.decode("utf-8-sig", errors="replace")
-        reader = csv.DictReader(io.StringIO(text_content))
+        # For CSV, just treat as plain text for now
+        # TODO: Revisit row-based chunking with batching when we have more time
+        #
+        # # For CSV: Use row-based chunking with batching to balance context and performance
+        # # Convert each row to "Col1: val1 | Col2: val2" format, then batch rows together
+        # text_content = content.decode("utf-8-sig", errors="replace")
+        # reader = csv.DictReader(io.StringIO(text_content))
+        #
+        # row_texts: list[str] = []
+        # for row in reader:
+        #     # Format: "ColA: valA | ColB: valB"
+        #     row_text = " | ".join(f"{k}: {v}" for k, v in row.items() if v and v.strip())
+        #     if row_text.strip():
+        #         row_texts.append(row_text)
+        #
+        # if not row_texts:
+        #     return []
+        #
+        # # Batch rows into chunks (target ~400-500 tokens per chunk for good retrieval)
+        # # Average row is ~50-100 tokens, so batch 5-10 rows per chunk
+        # chunks: list[str] = []
+        # current_chunk: list[str] = []
+        # current_tokens = 0
+        # target_tokens = 450  # Sweet spot for retrieval
+        #
+        # for row_text in row_texts:
+        #     row_tokens = num_tokens(row_text)
+        #
+        #     if current_tokens + row_tokens > target_tokens and current_chunk:
+        #         # Chunk is full, save it and start new one
+        #         chunks.append("\n".join(current_chunk))
+        #         current_chunk = [row_text]
+        #         current_tokens = row_tokens
+        #     else:
+        #         # Add to current chunk
+        #         current_chunk.append(row_text)
+        #         current_tokens += row_tokens
+        #
+        # # Don't forget the last chunk
+        # if current_chunk:
+        #     chunks.append("\n".join(current_chunk))
+        #
+        # return [{"text": chunk, "chunk_index": i} for i, chunk in enumerate(chunks)]
 
-        row_texts: list[str] = []
-        for row in reader:
-            # Format: "ColA: valA | ColB: valB"
-            row_text = " | ".join(f"{k}: {v}" for k, v in row.items() if v and v.strip())
-            if row_text.strip():
-                row_texts.append(row_text)
-
-        if not row_texts:
-            return []
-
-        # Batch rows into chunks (target ~400-500 tokens per chunk for good retrieval)
-        # Average row is ~50-100 tokens, so batch 5-10 rows per chunk
-        chunks: list[str] = []
-        current_chunk: list[str] = []
-        current_tokens = 0
-        target_tokens = 450  # Sweet spot for retrieval
-
-        for row_text in row_texts:
-            row_tokens = num_tokens(row_text)
-
-            if current_tokens + row_tokens > target_tokens and current_chunk:
-                # Chunk is full, save it and start new one
-                chunks.append("\n".join(current_chunk))
-                current_chunk = [row_text]
-                current_tokens = row_tokens
-            else:
-                # Add to current chunk
-                current_chunk.append(row_text)
-                current_tokens += row_tokens
-
-        # Don't forget the last chunk
-        if current_chunk:
-            chunks.append("\n".join(current_chunk))
-
-        return [{"text": chunk, "chunk_index": i} for i, chunk in enumerate(chunks)]
+        text = content.decode("utf-8-sig", errors="replace")
     elif filename.endswith(".pdf"):
         text = _extract_pdf_text_best_fidelity(content)
     elif filename.endswith(".docx"):
